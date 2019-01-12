@@ -33,7 +33,7 @@
 
 #include <nodes/include/BinaryOperationNode.h>
 #include <nodes/include/BroadcastFunctionNode.h>
-#include <nodes/include/CompiledActivationFunctions.h>
+#include <nodes/include/ActivationFunctions.h>
 #include <nodes/include/ConstantNode.h>
 #include <nodes/include/LinearPredictorNode.h>
 #include <nodes/include/MatrixVectorProductNode.h>
@@ -95,6 +95,12 @@ bool RedirectNeuralNetworkOutputByLayer(model::Map& map, size_t numLayersFromEnd
     }
 
     return found;
+}
+
+void PrintModel(model::Map& map, size_t refineIterations)
+{
+    map.Refine(refineIterations);
+    map.GetModel().Print(std::cout);
 }
 
 bool RedirectModelOutputByPortElements(model::Map& map, const std::string& targetPortElements, size_t refineIterations)
@@ -304,7 +310,7 @@ model::Map GetMultiClassMapFromBinaryPredictors(std::vector<PredictorType>& bina
     auto concatenationNode = model.AddNode<model::OutputNode<ElementType>>(mapOutput);
     auto matrixMultiplyNode = model.AddNode<nodes::MatrixVectorProductNode<ElementType, math::MatrixLayout::rowMajor>>(concatenationNode->output, weights);
     auto biasNode = model.AddNode<nodes::ConstantNode<ElementType>>(bias.ToArray());
-    auto addNode = model.AddNode<nodes::BinaryOperationNode<ElementType>>(matrixMultiplyNode->output, biasNode->output, emitters::BinaryOperationType::add);
+    auto addNode = model.AddNode<nodes::BinaryOperationNode<ElementType>>(matrixMultiplyNode->output, biasNode->output, nodes::BinaryOperationType::add);
 
     // Apply a sigmoid function so that output can be treated as a probability or
     // confidence score.
@@ -393,6 +399,12 @@ int main(int argc, char* argv[])
         auto map = common::LoadMap(retargetArguments.inputModelFilename);
         if (retargetArguments.verbose) std::cout << "(" << _timer.Elapsed() << " ms)" << std::endl;
 
+        if (retargetArguments.print)
+        {
+            PrintModel(map, retargetArguments.refineIterations);
+            return 0;
+        }
+
         // Create a map by redirecting a layer or node to be output
         bool redirected = false;
         if (retargetArguments.removeLastLayers > 0)
@@ -400,13 +412,12 @@ int main(int argc, char* argv[])
             if (map.GetOutputType() == model::Port::PortType::smallReal)
             {
                 redirected = RedirectNeuralNetworkOutputByLayer<float>(map, retargetArguments.removeLastLayers);
-                std::cout << "Removed last " << retargetArguments.removeLastLayers << " layers from neural network" << std::endl;
             }
             else
             {
                 redirected = RedirectNeuralNetworkOutputByLayer<double>(map, retargetArguments.removeLastLayers);
-                std::cout << "Removed last " << retargetArguments.removeLastLayers << " layers from neural network" << std::endl;
             }
+            std::cout << "Removed last " << retargetArguments.removeLastLayers << " layers from neural network" << std::endl;
         }
         else if (retargetArguments.targetPortElements.length() > 0)
         {
@@ -424,6 +435,10 @@ int main(int argc, char* argv[])
             std::cerr << "Could not splice model, exiting" << std::endl;
             return 1;
         }
+
+        auto output = map.GetOutput(0);
+        auto node = output.GetElement(0).ReferencedPort()->GetNode();
+        std::cout << "Using output from node of type " << node->GetRuntimeTypeName() << std::endl;
 
         // load dataset and map the output
         if (retargetArguments.verbose) std::cout << "Loading data ...";

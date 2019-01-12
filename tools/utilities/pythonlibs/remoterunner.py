@@ -101,11 +101,13 @@ class RemoteRunner:
         self.ssh.close()
 
     def logstream(self, stream):
+        output = []
         try:
             while True:
                 out = stream.readline()
                 if out:
                     msg = out.rstrip('\n')
+                    output += [ msg ]
                     self.print(msg)
                 else:
                     break
@@ -113,31 +115,36 @@ class RemoteRunner:
             errorType, value, traceback = sys.exc_info()
             msg = "### Exception: %s: %s" % (str(errorType), str(value))
             self.print(msg)
+        return output
 
-    def exec_remote_command(self, cmd):
+    def exec_remote_command(self, cmd, max_attempts=1):
         self.print("remote: " + cmd)
-        output = []
+        output = None
         self.buffer = io.StringIO()
         try:
-            stdin, stdout, stderr = self.ssh.exec_command(cmd, timeout=self.timeout)
-
-            stdout_thread = Thread(target=self.logstream, args=(stdout,))
-            stderr_thread = Thread(target=self.logstream, args=(stderr,))
-
-            stdout_thread.start()
-            stderr_thread.start()
-
-            while stdout_thread.isAlive() or stderr_thread.isAlive():
-                pass
+            for r in range(max_attempts):
+                output = []
+                _transport = self.ssh.get_transport()
+                _channel = _transport.open_session()
+                _channel.get_pty()
+                _channel.set_combine_stderr(True)
+                with _channel.makefile() as f_out:
+                    _channel.exec_command(cmd)
+                    output = self.logstream(f_out)
+                status = _channel.recv_exit_status()
+                if status == 0:
+                    break
+                else:
+                    print("Error, status code {} returned from remote, attempt {} of {}".format(status, r + 1, max_attempts))
+                    if (r + 1) < max_attempts:
+                        print("Retrying...")
 
         except:
             errorType, value, traceback = sys.exc_info()
             msg = "### Exception: %s: %s" % (str(errorType), str(value))
             self.print(msg)
 
-        result = self.buffer.getvalue().split('\n')
-        self.buffer = None
-        return result
+        return output
 
     def clean_target(self):
         if self.target_dir:
@@ -210,7 +217,7 @@ class RemoteRunner:
         if self.buffer:
             self.buffer.write(output + "\n")
 
-    def run_command(self):
+    def run_command(self, max_attempts=1):
         output = []
         try:
             self.lock_machine()
@@ -222,11 +229,11 @@ class RemoteRunner:
                 if self.target_dir:
                     self.exec_remote_command("cd {} && chmod u+x ./{}".format(
                         self.target_dir, self.command.split(" ")[0]))
-                    
+
                     output = self.exec_remote_command("cd {} && ./{}".format(
                         self.target_dir, self.command))
                 else:
-                    output = self.exec_remote_command(self.command)
+                    output = self.exec_remote_command(self.command, max_attempts=max_attempts)
             self.copy_files()
             if self.cleanup:
                 self.clean_target()
@@ -236,7 +243,7 @@ class RemoteRunner:
             msg = "### Exception: %s: %s" % (str(errorType), str(value) + "\n" + str(traceback))
             self.print(msg)
             if self.buffer:
-                output = self.buffer.getvalue().split('\n')
+                output += [ self.buffer.getvalue().split('\n') ]
             output += [ msg ]
         finally:
             self.free_machine()
@@ -253,7 +260,7 @@ class RemoteRunner:
 
 
 if __name__ == "__main__":
-    
+
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     import argparse
@@ -266,10 +273,10 @@ if __name__ == "__main__":
     arg_parser.add_argument("--password", help="Password for logon to remote machine", default=None)
     arg_parser.add_argument("--command", help="The command to run on the remote machine", default=None)
     arg_parser.add_argument("--timeout", type=int, help="Timeout for the command in seconds (default 300 seconds)", default=300)
-    
+
     args = arg_parser.parse_args()
-        
+
     runner = RemoteRunner(ipaddress = args.ipaddress, cluster=args.cluster, username=args.username, password=args.password,
         command=args.command, verbose=True, timeout=args.timeout, apikey=args.apikey)
     runner.run_command()
-    
+

@@ -238,7 +238,7 @@ static void TestMovingVarianceNodeCompute()
     testing::ProcessTest("Testing MovingVarianceNode compute", testing::IsEqual(outputVec[0], expectedOutput));
 }
 
-static void TestUnaryOperationNodeCompute(emitters::UnaryOperationType op, double (*expectedTransform)(double))
+static void TestUnaryOperationNodeCompute(nodes::UnaryOperationType op, double (*expectedTransform)(double))
 {
     std::vector<std::vector<double>> data = { { 1 }, { 2 }, { 3 }, { 4 }, { 5 }, { 6 }, { 7 }, { 8 }, { 9 }, { 10 } };
 
@@ -256,13 +256,13 @@ static void TestUnaryOperationNodeCompute(emitters::UnaryOperationType op, doubl
         for (size_t d = 0; d < inputValue.size(); ++d)
         {
             auto expectedOutput = expectedTransform(inputValue[d]);
-            testing::ProcessTest("Testing UnaryOperationNode compute for " + UnaryOperations::to_string(op),
+            testing::ProcessTest("Testing UnaryOperationNode compute for " + ell::nodes::operations::to_string(op),
                                  testing::IsEqual(outputVec[d], expectedOutput));
         }
     }
 }
 
-static void TestUnaryOperationNodeCompute(emitters::UnaryOperationType op, bool (*expectedTransform)(bool))
+static void TestUnaryOperationNodeCompute(nodes::UnaryOperationType op, bool (*expectedTransform)(bool))
 {
     std::vector<std::vector<bool>> data = { { true }, { false } };
 
@@ -280,7 +280,7 @@ static void TestUnaryOperationNodeCompute(emitters::UnaryOperationType op, bool 
         for (size_t d = 0; d < inputValue.size(); ++d)
         {
             auto expectedOutput = expectedTransform(inputValue[d]);
-            testing::ProcessTest("Testing UnaryOperationNode compute for " + UnaryOperations::to_string(op),
+            testing::ProcessTest("Testing UnaryOperationNode compute for " + ell::nodes::operations::to_string(op),
                                  testing::IsEqual(outputVec[d], expectedOutput));
         }
     }
@@ -288,12 +288,16 @@ static void TestUnaryOperationNodeCompute(emitters::UnaryOperationType op, bool 
 
 static void TestUnaryOperationNodeCompute()
 {
-    TestUnaryOperationNodeCompute(emitters::UnaryOperationType::exp, std::exp);
-    TestUnaryOperationNodeCompute(emitters::UnaryOperationType::log, std::log);
-    TestUnaryOperationNodeCompute(emitters::UnaryOperationType::sqrt, std::sqrt);
-    TestUnaryOperationNodeCompute(emitters::UnaryOperationType::logicalNot, [](bool b) { return !b; });
-    TestUnaryOperationNodeCompute(emitters::UnaryOperationType::square, [](double d) { return d * d; });
-    TestUnaryOperationNodeCompute(emitters::UnaryOperationType::tanh, std::tanh);
+    TestUnaryOperationNodeCompute(UnaryOperationType::abs, std::abs);
+    TestUnaryOperationNodeCompute(UnaryOperationType::cos, std::cos);
+    TestUnaryOperationNodeCompute(UnaryOperationType::exp, std::exp);
+    TestUnaryOperationNodeCompute(UnaryOperationType::log, std::log);
+    TestUnaryOperationNodeCompute(UnaryOperationType::sqrt, std::sqrt);
+    TestUnaryOperationNodeCompute(UnaryOperationType::logicalNot, [](bool b) { return !b; });
+    TestUnaryOperationNodeCompute(UnaryOperationType::sin, std::sin);
+    TestUnaryOperationNodeCompute(UnaryOperationType::sqrt, std::sqrt);
+    TestUnaryOperationNodeCompute(UnaryOperationType::square, [](double d) { return d * d; });
+    TestUnaryOperationNodeCompute(UnaryOperationType::tanh, std::tanh);
 }
 
 static void TestBinaryOperationNodeCompute()
@@ -302,7 +306,7 @@ static void TestBinaryOperationNodeCompute()
 
     model::Model model;
     auto inputNode = model.AddNode<model::InputNode<double>>(data[0].size());
-    auto outputNode = model.AddNode<nodes::BinaryOperationNode<double>>(inputNode->output, inputNode->output, emitters::BinaryOperationType::add);
+    auto outputNode = model.AddNode<nodes::BinaryOperationNode<double>>(inputNode->output, inputNode->output, nodes::BinaryOperationType::add);
 
     for (size_t index = 0; index < data.size(); ++index)
     {
@@ -333,7 +337,7 @@ static void TestBinaryOperationNodeCompute2()
 
     auto input1Node = model.AddNode<model::InputNode<double>>(input1Shape.GetMemorySize());
     auto constantNode = model.AddNode<nodes::ConstantNode<double>>(std::vector<double>{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0 });
-    auto outputNode = model.AddNode<nodes::BinaryOperationNode<double>>(input1Node->output, input1Shape, constantNode->output, input2Shape, outputShape, emitters::BinaryOperationType::add, 0);
+    auto outputNode = model.AddNode<nodes::BinaryOperationNode<double>>(input1Node->output, input1Shape, constantNode->output, input2Shape, outputShape, nodes::BinaryOperationType::add, 0);
     auto map = model::Map(model, { { "input", input1Node } }, { { "output", outputNode->output } });
 
     std::vector<double> expected{ 2, 4, 6, 8, 10, 12, 14, 16 };
